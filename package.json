@@ -4,17 +4,24 @@
   "sideEffects": false,
   "type": "module",
   "scripts": {
-    "build": "remix vite:build",
+    "build": "remix build",
     "dev": "remix vite:dev",
     "lint": "eslint --ignore-path .gitignore --cache --cache-location ./node_modules/.cache/eslint .",
-    "start": "remix-serve ./build/server/index.js",
-    "typecheck": "tsc"
+    "start": "node server.js",
+    "typecheck": "tsc",
+    "postinstall": "remix setup node"
   },
   "dependencies": {
+    "@remix-run/express": "^2.15.2",
     "@remix-run/node": "^2.15.2",
     "@remix-run/react": "^2.15.2",
     "@remix-run/serve": "^2.15.2",
+    "bcrypt": "^5.1.1",
+    "cors": "^2.8.5",
+    "express": "^4.21.2",
     "isbot": "^4.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.9.5",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
