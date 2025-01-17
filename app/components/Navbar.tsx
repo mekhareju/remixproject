@@ -1,6 +1,7 @@
-import React from 'react';
-import { Link } from '@remix-run/react';
 import '../styles/Navbar.css';
+
+import { Link } from '@remix-run/react';
+import React from 'react';
 
 const Navbar: React.FC = () => {
   return (
@@ -11,7 +12,7 @@ const Navbar: React.FC = () => {
         <li><Link to="/about">About</Link></li>
         <li><Link to="/login">Login</Link></li>
       </ul>
-      <button className="mobile-menu-icon">☰</button>
+      <button className="mobile-menu-icon">Test</button>
     </nav>
   );
 };
