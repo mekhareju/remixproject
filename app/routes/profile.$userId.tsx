@@ -2,7 +2,8 @@ import React, { useState, FormEvent } from 'react';
 import { useLoaderData, redirect, json, Form, useActionData } from '@remix-run/react';
 import { LoaderFunction, ActionFunction } from '@remix-run/node';
 import connectToDatabase from '~/utils/db';
-import { authenticateToken } from '~/middleware/Middleware'; 
+import UserProfileModel from '~/models/UserProfileModel'; 
+import { authenticateToken } from '~/middleware/Middleware';
 
 interface UserData {
   name: string;
@@ -30,24 +31,19 @@ export const loader: LoaderFunction = async ({ params, request }) => {
   }
 
   try {
-    const userPayload = await authenticateToken(token);
-    const response = await fetch(`http://localhost:3000/profile/${userId}`, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-    });
-
-    if (response.ok) {
-      const userData = await response.json();
-      return json({ userData });
-    } else {
-      const errorData = await response.json();
-      return json({ message: errorData.message || 'Failed to fetch profile.' }, { status: response.status });
+    const userPayload = await authenticateToken(token); // Verify token and get user details
+    if (!userPayload) {
+      return redirect('/login');
     }
+
+    const user = await UserProfileModel.findById(userId);
+    if (!user) {
+      return json({ message: 'User not found' }, { status: 404 });
+    }
+
+    return json({ userData: { name: user.name, email: user.email, location: user.location } });
   } catch (error) {
-    console.error('Error fetching profile:', error);
+    console.error('Error in loader:', error);
     return json({ message: 'An error occurred while fetching the profile.' }, { status: 500 });
   }
 };
@@ -63,36 +59,29 @@ export const action: ActionFunction = async ({ request, params }) => {
     return redirect('/login');
   }
 
-  const userData = {
-    name: formData.get('name')?.toString(),
-    email: formData.get('email')?.toString(),
-    location: formData.get('location')?.toString(),
-  };
-
   try {
-    const userPayload = await authenticateToken(token);
-    const response = await fetch(`http://localhost:3000/profile/${userId}`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(userData),
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      return json({ message: data.message || 'Profile updated successfully!' });
-    } else {
-      const errorData = await response.json();
-      return json({ message: errorData.message || 'Failed to update profile.' }, { status: response.status });
+    const userPayload = await authenticateToken(token); 
+    if (!userPayload) {
+      return redirect('/login');
     }
+
+    const userData = {
+      name: formData.get('name')?.toString(),
+      email: formData.get('email')?.toString(),
+      location: formData.get('location')?.toString(),
+    };
+
+    const user = await UserProfileModel.findByIdAndUpdate(userId, userData, { new: true });
+    if (!user) {
+      return json({ message: 'User not found or update failed' }, { status: 404 });
+    }
+
+    return json({ message: 'Profile updated successfully!' });
   } catch (error) {
-    console.error('Error updating profile:', error);
+    console.error('Error in action:', error);
     return json({ message: 'An error occurred while updating the profile.' }, { status: 500 });
   }
 };
-
 
 const UserProfile: React.FC = () => {
   const { userData, message: initialMessage } = useLoaderData<LoaderData>();

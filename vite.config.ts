@@ -21,4 +21,10 @@ export default defineConfig({
     }),
     tsconfigPaths(),
   ],
+  optimizeDeps: {
+    exclude: ["@mapbox/node-pre-gyp", "mock-aws-s3", "aws-sdk", "nock"],
+  },
+  ssr: {
+    noExternal: ["@mapbox/node-pre-gyp", "mock-aws-s3", "aws-sdk", "nock"],
+  },
 });

@@ -2,14 +2,22 @@ import React, { useState, FormEvent } from 'react';
 import { Link, useNavigate } from '@remix-run/react';
 import { Form, useActionData, json } from '@remix-run/react';
 import { ActionFunction } from '@remix-run/node';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import User from '~/models/User';
+import connectToDatabase from '~/utils/db';
+
+const JWT_SECRET = 'your_jwt_secret';
+const JWT_EXPIRES_IN = '1h';
 
 interface ActionData {
   message: string;
   token?: string;
-  user?: { id: string };
+  user?: { _id: string;  name: string; email: string };
 }
 
 export const action: ActionFunction = async ({ request }) => {
+  await connectToDatabase();
   const formData = await request.formData();
   const name = formData.get('name')?.toString();
   const email = formData.get('email')?.toString();
@@ -20,21 +28,30 @@ export const action: ActionFunction = async ({ request }) => {
   }
 
   try {
-    const response = await fetch('http://localhost:3000/auth/signup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, email, password }),
-    });
-
-    const data: ActionData = await response.json();
-    if (response.ok) {
-      return new Response(JSON.stringify({ message: 'User registered successfully!', token: data.token, user: data.user }), { status: 201 });
-    } else {
-      return new Response(JSON.stringify({ message: data.message || 'Signup failed.' }), { status: 400 });
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return json({ message: 'Email already in use' }, { status: 400 });
     }
+
+    if (password.length < 6) {
+      return json({ message: 'Password must be at least 6 characters long' }, { status: 400 });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = new User({ name, email, password: hashedPassword });
+    await newUser.save();
+
+    const token = jwt.sign({ id: newUser._id }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN }); 
+
+    return json({ 
+      message: 'User registered successfully!', 
+      token, 
+      user: { _id: newUser._id, name: newUser.name, email: newUser.email } 
+    }, { status: 201 });
+
   } catch (error) {
     console.error('Error:', error);
-    return new Response(JSON.stringify({ message: 'Something went wrong. Please try again.' }), { status: 500 });
+    return json({ message: 'Something went wrong. Please try again.' }, { status: 500 });
   }
 };
 
@@ -44,29 +61,29 @@ const SignUp: React.FC = () => {
   const [loading, setLoading] = useState(false);
 
   React.useEffect(() => {
-    if (actionData?.token && actionData?.user?.id) {
+    if (actionData?.token && actionData?.user?._id) {
       localStorage.setItem('userToken', actionData.token);
-      localStorage.setItem('userId', actionData.user.id);
+      localStorage.setItem('userId', actionData.user._id);
       navigate('/login');
     }
   }, [actionData, navigate]);
 
-  const handleSignUp = async (e: FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    await fetch('/auth/signup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: new FormData(e.currentTarget as HTMLFormElement),
-    });
-    setLoading(false);
-  };
+  //const handleSignUp = async (e: FormEvent) => {
+   // e.preventDefault();
+   // setLoading(true);
+   // await fetch('/auth/signup', {
+    //  method: 'POST',
+    //  headers: { 'Content-Type': 'application/json' },
+    //  body: new FormData(e.currentTarget as HTMLFormElement),
+   // });
+   // setLoading(false);
+ // };
 
   return (
     <div style={styles.container}>
       <div style={styles.formBox}>
         <h2 style={styles.heading}>Sign Up</h2>
-        <Form method="post" onSubmit={handleSignUp} style={{ maxWidth: '400px', margin: '0 auto' }}>
+        <Form method="post" style={{ maxWidth: '400px', margin: '0 auto' }}>
           <div style={styles.formGroup}>
             <label style={styles.label} htmlFor="name">
               Name

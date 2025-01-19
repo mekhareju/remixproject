@@ -1,12 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useActionData, Form, json } from '@remix-run/react';
 import { ActionFunction, LoaderFunction } from '@remix-run/node';
-import { Link } from '@remix-run/react';
+import { Link, useNavigate} from '@remix-run/react';
+import bcrypt from 'bcrypt'; 
+import jwt from 'jsonwebtoken';
+import User from '~/models/User';
+import connectToDatabase from '~/utils/db';
+
+const JWT_SECRET = 'your_jwt_secret';
+const JWT_EXPIRES_IN = '1h';
 
 interface ActionData {
   message: string;
   token?: string;
-  user?: { id: string };
+  user?: { _id: string; name: string; email: string };
 }
 
 export const loader: LoaderFunction = async () => {
@@ -14,50 +21,70 @@ export const loader: LoaderFunction = async () => {
 };
 
 export const action: ActionFunction = async ({ request }) => {
-  const formData = await request.formData();
-  const email = formData.get('email');
-  const password = formData.get('password');
-
-  if (!email || !password) {
-    return new Response(JSON.stringify({ message: 'Please enter both email and password' }), { status: 400 });
-  }
-
   try {
-    const response = await fetch('http://localhost:3000/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
+    await connectToDatabase();
 
-    if (response.ok) {
-      const data: ActionData = await response.json();
-      return json({ message: 'Login successful!', token: data.token, user: data.user });
-    } else {
-      const errorData: ActionData = await response.json();
-      return new Response(JSON.stringify({ message: errorData.message || 'Invalid email or password' }), { status: 400 });
+    const formData = await request.formData();
+    const email = formData.get('email')?.toString();
+    const password = formData.get('password')?.toString();
+
+    if (!email || !password) {
+      return json({ message: 'Please enter both email and password' }, { status: 400 });
     }
+
+    const user = await User.findOne({ email }).lean();
+    if (!user) {
+      return json({ message: 'Invalid email or password' }, { status: 400 });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return json({ message: 'Invalid email or password' }, { status: 400 });
+    }
+
+    const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+
+    return json({
+      message: 'Login successful',
+      token,
+      user: { _id: user._id, name: user.name, email: user.email },
+    }, { status: 200 });
   } catch (error) {
-    console.error('Error:', error);
-    return new Response(JSON.stringify({ message: 'Something went wrong. Please try again.' }), { status: 500 });
+    console.error('Error during login:', error);
+    return json({ message: 'Something went wrong. Please try again.' }, { status: 500 });
   }
 };
 
+
 const Login: React.FC = () => {
   const actionData = useActionData<ActionData>();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
-  React.useEffect(() => {
-    if (actionData?.token && actionData?.user?.id) {
-      localStorage.setItem('userToken', actionData.token);
-      localStorage.setItem('userId', actionData.user.id);
-      window.location.href = `/profile/${actionData.user.id}`;
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setLoading(true);
+  };
+
+    if (actionData?.token && actionData?.user) {
+      try {
+        localStorage.setItem("userToken", actionData.token);
+        localStorage.setItem("userId", actionData.user._id);
+
+        navigate(`/profile/${actionData.user._id}`);
+      } catch (error) {
+        console.error("Error accessing localStorage:", error);
+      }
     }
-  }, [actionData]);
+
 
   return (
     <div style={{ textAlign: 'center', marginTop: '50px' }}>
       <h2>Login</h2>
-      <Form method="post" style={{ maxWidth: '400px', margin: '0 auto' }} onSubmit={() => setLoading(true)}>
+      <Form method="post" style={{ maxWidth: '400px', margin: '0 auto' }} onSubmit={handleSubmit}>
         <div style={{ marginBottom: '15px' }}>
           <input
             type="email"
@@ -80,6 +107,8 @@ const Login: React.FC = () => {
             name="password"
             placeholder="Password"
             required
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
             style={{
               width: '100%',
               padding: '10px',

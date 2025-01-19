@@ -1,12 +1,13 @@
-import React from 'react';
-import { LinksFunction, MetaFunction, LoaderFunction } from '@remix-run/node';
-import { Links, LiveReload, Meta, Outlet, Scripts, ScrollRestoration } from '@remix-run/react';
-import Navbar from './components/Navbar';
+import { Links, Meta, Outlet, Scripts, ScrollRestoration } from '@remix-run/react';
+//import React from 'react';
+import { LinksFunction, LoaderFunction, MetaFunction } from '@remix-run/node';
+
 import Footer from './components/Footer';
-import styles from './styles/index.css';
+import Navbar from './components/Navbar';
+
+//import styles from './styles/index.css';
 
 export const links: LinksFunction = () => [
-  { rel: 'stylesheet', href: styles },
   { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
   { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossOrigin: 'anonymous' },
   {
@@ -35,7 +36,6 @@ export default function Root() {
         <Footer />
         <ScrollRestoration />
         <Scripts />
-        <LiveReload />
       </body>
     </html>
   );

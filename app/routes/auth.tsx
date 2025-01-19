@@ -34,6 +34,8 @@ export const action: ActionFunction = async ({ request }) => {
       const newUser = new User({ name, email, password: hashedPassword });
       await newUser.save();
 
+      //const token = jwt.sign({ id: newUser._id }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN }); 
+
       return new Response(JSON.stringify({ message: 'User registered successfully' }), { status: 201 });
     }
 
@@ -49,6 +51,7 @@ export const action: ActionFunction = async ({ request }) => {
       }
 
       const token = jwt.sign({ id: user._id }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+
       return new Response(JSON.stringify({
         message: 'Login successful',
         token,

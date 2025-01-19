@@ -1,6 +1,6 @@
 import React from 'react';
 import { LinksFunction, MetaFunction, LoaderFunction } from '@remix-run/node';
-import { useLoaderData } from '@remix-run/react';
+import { Link, Outlet, ScrollRestoration, useLoaderData } from '@remix-run/react';
 import connectToDatabase from '../utils/db';
 import User from '../models/User';
 
@@ -53,6 +53,8 @@ export default function Index() {
           />
         ))}
       </div>
+      <Outlet />
+      <ScrollRestoration />
     </div>
   );
 }
