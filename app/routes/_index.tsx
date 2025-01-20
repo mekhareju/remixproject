@@ -1,19 +1,18 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { LinksFunction, MetaFunction, LoaderFunction } from '@remix-run/node';
 import { Link, Outlet, ScrollRestoration, useLoaderData } from '@remix-run/react';
 import connectToDatabase from '../utils/db';
-import User from '../models/User';
+import Product from '../models/Product';
 
-interface User {
+interface Product {
   _id: string;
-  name: string;
-  email: string;
-  password: string;
-  location?: string;
+  title: string;
+  imagePath: string;
+  price: number;
 }
 
 interface LoaderData {
-  users: User[];
+  products: Product[];
 }
 
 export const links: LinksFunction = () => {
@@ -26,31 +25,37 @@ export const meta: MetaFunction = () => {
 
 export const loader: LoaderFunction = async () => {
   await connectToDatabase();
-  const users = await User.find().lean();
-  return { users };
+  const products = await Product.find().lean();
+  return { products };
 };
 
 export default function Index() {
-  const { users } = useLoaderData<LoaderData>();
+  const { products } = useLoaderData<LoaderData>();
+  const [hasMounted, setHasMounted] = useState(false);
   
-  const images = [
-    '/images/img.png',
-    '/images/img2.png',
-    '/images/img3.png',
-  ];
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
+
+  if (!hasMounted) {
+    return null; 
+  }
 
   return (
     <div style={styles.container}>
       <h1 style={styles.heading}>Welcome to My Gift Shop!</h1>
       <p style={styles.subheading}>Your one-stop shop for unique gifts!</p>
       <div style={styles.imageContainer}>
-        {images.map((src, index) => (
-          <img
-            key={index}
-            src={src}
-            alt={`Gift ${index + 1}`}
-            style={styles.image}
-          />
+      {products.map((product) => (
+          <div key={product._id} style={styles.productCard}>
+            <img
+              src={product.imagePath} 
+              alt={product.title}
+              style={styles.image}
+            />
+            <h3>{product.title}</h3>
+            <p>RS {product.price}</p>
+          </div>
         ))}
       </div>
       <Outlet />

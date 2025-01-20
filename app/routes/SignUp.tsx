@@ -1,4 +1,4 @@
-import React, { useState, FormEvent } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from '@remix-run/react';
 import { Form, useActionData, json } from '@remix-run/react';
 import { ActionFunction } from '@remix-run/node';
@@ -13,18 +13,19 @@ const JWT_EXPIRES_IN = '1h';
 interface ActionData {
   message: string;
   token?: string;
-  user?: { _id: string;  name: string; email: string };
+  user?: { _id: string; name: string; email: string };
 }
 
 export const action: ActionFunction = async ({ request }) => {
   await connectToDatabase();
+
   const formData = await request.formData();
   const name = formData.get('name')?.toString();
   const email = formData.get('email')?.toString();
   const password = formData.get('password')?.toString();
 
   if (!name || !email || !password) {
-    return new Response(JSON.stringify({ message: 'Please fill in all fields' }), { status: 400 });
+    return json({ message: 'Please fill in all fields' }, { status: 400 });
   }
 
   try {
@@ -41,14 +42,13 @@ export const action: ActionFunction = async ({ request }) => {
     const newUser = new User({ name, email, password: hashedPassword });
     await newUser.save();
 
-    const token = jwt.sign({ id: newUser._id }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN }); 
+    const token = jwt.sign({ id: newUser._id }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
 
-    return json({ 
-      message: 'User registered successfully!', 
-      token, 
-      user: { _id: newUser._id, name: newUser.name, email: newUser.email } 
+    return json({
+      message: 'User registered successfully!',
+      token,
+      user: { _id: newUser._id, name: newUser.name, email: newUser.email },
     }, { status: 201 });
-
   } catch (error) {
     console.error('Error:', error);
     return json({ message: 'Something went wrong. Please try again.' }, { status: 500 });
@@ -60,25 +60,14 @@ const SignUp: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (actionData?.token && actionData?.user?._id) {
       localStorage.setItem('userToken', actionData.token);
       localStorage.setItem('userId', actionData.user._id);
       navigate('/login');
     }
   }, [actionData, navigate]);
-
-  //const handleSignUp = async (e: FormEvent) => {
-   // e.preventDefault();
-   // setLoading(true);
-   // await fetch('/auth/signup', {
-    //  method: 'POST',
-    //  headers: { 'Content-Type': 'application/json' },
-    //  body: new FormData(e.currentTarget as HTMLFormElement),
-   // });
-   // setLoading(false);
- // };
-
+  
   return (
     <div style={styles.container}>
       <div style={styles.formBox}>
@@ -197,5 +186,6 @@ const styles: { [key: string]: React.CSSProperties } = {
     textDecoration: 'none',
   },
 };
+
 
 export default SignUp;

@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useActionData, Form, json } from '@remix-run/react';
-import { ActionFunction, LoaderFunction } from '@remix-run/node';
-import { Link, useNavigate} from '@remix-run/react';
-import bcrypt from 'bcrypt'; 
+import { ActionFunction } from '@remix-run/node';
+import { Link, useNavigate } from '@remix-run/react';
+import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import User from '~/models/User';
 import connectToDatabase from '~/utils/db';
 
-const JWT_SECRET = 'your_jwt_secret';
+const JWT_SECRET = 'your-secret-key';
 const JWT_EXPIRES_IN = '1h';
 
 interface ActionData {
@@ -16,23 +16,19 @@ interface ActionData {
   user?: { _id: string; name: string; email: string };
 }
 
-export const loader: LoaderFunction = async () => {
-  return json({});
-};
-
 export const action: ActionFunction = async ({ request }) => {
+  await connectToDatabase();
+
+  const formData = await request.formData();
+  const email = formData.get('email')?.toString();
+  const password = formData.get('password')?.toString();
+
+  if (!email || !password) {
+    return json({ message: 'Please enter both email and password' }, { status: 400 });
+  }
+
   try {
-    await connectToDatabase();
-
-    const formData = await request.formData();
-    const email = formData.get('email')?.toString();
-    const password = formData.get('password')?.toString();
-
-    if (!email || !password) {
-      return json({ message: 'Please enter both email and password' }, { status: 400 });
-    }
-
-    const user = await User.findOne({ email }).lean();
+    const user = await User.findOne({ email });
     if (!user) {
       return json({ message: 'Invalid email or password' }, { status: 400 });
     }
@@ -55,97 +51,131 @@ export const action: ActionFunction = async ({ request }) => {
   }
 };
 
-
 const Login: React.FC = () => {
   const actionData = useActionData<ActionData>();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setLoading(true);
-  };
-
+  useEffect(() => {
     if (actionData?.token && actionData?.user) {
-      try {
-        localStorage.setItem("userToken", actionData.token);
-        localStorage.setItem("userId", actionData.user._id);
-
-        navigate(`/profile/${actionData.user._id}`);
-      } catch (error) {
-        console.error("Error accessing localStorage:", error);
-      }
+      console.log("Token and user received", actionData.token, actionData.user);
+      localStorage.setItem('userToken', actionData.token);
+      localStorage.setItem('userId', actionData.user._id);
+      navigate('/profile');
     }
+  }, [actionData, navigate]);
 
+ // const handleSubmit = async (e: React.FormEvent) => {
+   // e.preventDefault();
+    //setLoading(true);
+  //};
 
   return (
-    <div style={{ textAlign: 'center', marginTop: '50px' }}>
-      <h2>Login</h2>
-      <Form method="post" style={{ maxWidth: '400px', margin: '0 auto' }} onSubmit={handleSubmit}>
-        <div style={{ marginBottom: '15px' }}>
-          <input
-            type="email"
-            name="email"
-            placeholder="Email"
-            required
-            style={{
-              width: '100%',
-              padding: '10px',
-              fontSize: '16px',
-              marginBottom: '10px',
-              borderRadius: '5px',
-              border: '1px solid #ccc',
-            }}
-          />
-        </div>
-        <div style={{ marginBottom: '15px' }}>
-          <input
-            type="password"
-            name="password"
-            placeholder="Password"
-            required
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            style={{
-              width: '100%',
-              padding: '10px',
-              fontSize: '16px',
-              marginBottom: '10px',
-              borderRadius: '5px',
-              border: '1px solid #ccc',
-            }}
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            width: '100%',
-            padding: '10px',
-            fontSize: '16px',
-            borderRadius: '5px',
-            backgroundColor: loading ? '#ccc' : '#007BFF',
-            color: 'white',
-            border: 'none',
-            cursor: loading ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {loading ? 'Logging in...' : 'Login'}
-        </button>
-      </Form>
-      <p>
-        No account yet? <Link to="/signup">Sign up</Link>
-      </p>
-      {actionData?.message && (
-        <p style={{ marginTop: '15px', color: actionData.message.includes('successful') ? 'green' : 'red' }}>
-          {actionData.message}
+    <div style={styles.container}>
+      <div style={styles.formBox}>
+        <h2 style={styles.heading}>Login</h2>
+        <Form method="post" style={{ maxWidth: '400px', margin: '0 auto' }}>
+          <div style={styles.formGroup}>
+            <label style={styles.label} htmlFor="email">
+              Email
+            </label>
+            <input
+              style={styles.input}
+              type="email"
+              id="email"
+              name="email"
+              placeholder="Enter your email"
+              required
+            />
+          </div>
+          <div style={styles.formGroup}>
+            <label style={styles.label} htmlFor="password">
+              Password
+            </label>
+            <input
+              style={styles.input}
+              type="password"
+              id="password"
+              name="password"
+              placeholder="Enter your password"
+              required
+            />
+          </div>
+          <button style={styles.button} type="submit" disabled={loading}>
+            {loading ? 'Logging in...' : 'Login'}
+          </button>
+        </Form>
+        {actionData?.message && (
+          <p style={{ color: actionData.token ? 'green' : 'red', textAlign: 'center', marginTop: '10px' }}>
+            {actionData.message}
+          </p>
+        )}
+        <p style={styles.switchText}>
+          Don't have an account?{' '}
+          <Link to="/signup" style={styles.link}>
+            Sign Up
+          </Link>
         </p>
-      )}
+      </div>
     </div>
   );
+};
+
+const styles: { [key: string]: React.CSSProperties } = {
+  container: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '100vh',
+    backgroundColor: '#f3f4f6',
+  },
+  formBox: {
+    backgroundColor: '#fff',
+    padding: '30px',
+    borderRadius: '8px',
+    boxShadow: '0 4px 10px rgba(0, 0, 0, 0.1)',
+    width: '100%',
+    maxWidth: '400px',
+  },
+  heading: {
+    textAlign: 'center',
+    marginBottom: '20px',
+    color: '#333',
+  },
+  formGroup: {
+    marginBottom: '20px',
+  },
+  label: {
+    display: 'block',
+    fontSize: '14px',
+    marginBottom: '8px',
+    color: '#555',
+  },
+  input: {
+    width: '100%',
+    padding: '12px',
+    borderRadius: '8px',
+    border: '2px solid #ccc',
+    boxSizing: 'border-box',
+  },
+  button: {
+    width: '100%',
+    padding: '12px',
+    backgroundColor: '#007bff',
+    color: '#fff',
+    borderRadius: '8px',
+    border: 'none',
+    cursor: 'pointer',
+    fontSize: '16px',
+  },
+  switchText: {
+    textAlign: 'center',
+    marginTop: '20px',
+  },
+  link: {
+    color: '#007bff',
+    textDecoration: 'none',
+  },
 };
 
 export default Login;

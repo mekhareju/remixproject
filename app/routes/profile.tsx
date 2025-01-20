@@ -1,42 +1,212 @@
+import React, { useState, FormEvent } from 'react';
+import { useLoaderData, Form, json, useActionData, redirect } from '@remix-run/react';
 import { LoaderFunction, ActionFunction } from '@remix-run/node';
 import connectToDatabase from '~/utils/db';
-import User from '~/models/User';
-import { authenticateToken } from '~/middleware/Middleware'; 
+import UserProfileModel from '~/models/UserProfileModel';
+import jwt from 'jsonwebtoken';
 
-export const loader: LoaderFunction = async ({ params, request }) => {
+const JWT_SECRET = 'your-secret-key';
+
+interface UserData {
+  name: string;
+  email: string;
+  location: string;
+}
+
+interface LoaderData {
+  userData: UserData;
+  message?: string;
+}
+
+interface ActionData {
+  message?: string;
+}
+
+export const loader: LoaderFunction = async ({ request }) => {
   await connectToDatabase();
 
   const token = request.headers.get('Authorization')?.split(' ')[1];
-  if (!token) return new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 401 });
+
+  if (!token) {
+    return redirect('/login');
+  }
 
   try {
-    const userPayload = await authenticateToken(token);
-    const user = await User.findById(params.id).select('-password');
-    if (!user) return new Response(JSON.stringify({ message: 'User not found' }), { status: 404 });
-
-    return new Response(JSON.stringify(user), { status: 200 });
-  } catch (err) {
-    const error = err as Error;
-    return new Response(JSON.stringify({ message: error.message }), { status: 403 });
+    const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
+    const user = await UserProfileModel.findById(decoded.id);
+    if (!user) {
+      return json({ message: 'User not found' }, { status: 404 });
+    }
+    return json({ userData: { name: user.name, email: user.email, location: user.location } });
+  } catch (error) {
+    console.error('Error in loader:', error);
+    return json({ message: 'An error occurred while fetching the profile.' }, { status: 500 });
   }
 };
 
-export const action: ActionFunction = async ({ request, params }) => {
+export const action: ActionFunction = async ({ request }) => {
   await connectToDatabase();
 
+  const formData = new URLSearchParams(await request.text());
   const token = request.headers.get('Authorization')?.split(' ')[1];
-  if (!token) return new Response(JSON.stringify({ message: 'Unauthorized' }), { status: 401 });
+
+  if (!token) {
+    return redirect('/login');
+  }
 
   try {
-    const updates = await request.json();
-    if (updates.password) return new Response(JSON.stringify({ message: 'Password updates are not allowed here' }), { status: 400 });
+    const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
+    const userData = {
+      name: formData.get('name') || '',
+      email: formData.get('email') || '',
+      location: formData.get('location') || '',
+    };
 
-    const user = await User.findByIdAndUpdate(params.id, updates, { new: true, runValidators: true }).select('-password');
-    if (!user) return new Response(JSON.stringify({ message: 'User not found' }), { status: 404 });
+    const user = await UserProfileModel.findByIdAndUpdate(decoded.id, userData, { new: true });
+    if (!user) {
+      return json({ message: 'User not found or update failed' }, { status: 404 });
+    }
 
-    return new Response(JSON.stringify({ message: 'Profile updated successfully', user }), { status: 200 });
-  } catch (err) {
-    const error = err as Error;
-    return new Response(JSON.stringify({ message: error.message }), { status: 403 });
+    return json({ message: 'Profile updated successfully!' });
+  } catch (error) {
+    console.error('Error in action:', error);
+    return json({ message: 'An error occurred while updating the profile.' }, { status: 500 });
   }
 };
+
+const UserProfile: React.FC = () => {
+  const { userData, message: initialMessage } = useLoaderData<LoaderData>();
+  const actionData = useActionData<ActionData>();
+  const [userDataState, setUserDataState] = useState<UserData>(userData);
+  const [message, setMessage] = useState<string>(initialMessage || '');
+  const [loading, setLoading] = useState<boolean>(false);
+
+  const handleUpdate = async (e: FormEvent) => {
+    setLoading(true);
+    setMessage('');
+    setLoading(false);
+  }
+
+  return (
+    <div style={styles.container}>
+      <div style={styles.formBox}>
+        <h2 style={styles.heading}>User Profile</h2>
+        {loading && <p style={styles.loading}>Loading...</p>}
+        <Form method="post" onSubmit={handleUpdate}>
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Name</label>
+            <input
+              style={styles.input}
+              type="text"
+              name="name"
+              value={userDataState.name}
+              onChange={(e) => setUserDataState({ ...userDataState, name: e.target.value })}
+              required
+            />
+          </div>
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Email</label>
+            <input
+              style={styles.input}
+              type="email"
+              name="email"
+              value={userDataState.email}
+              onChange={(e) => setUserDataState({ ...userDataState, email: e.target.value })}
+              required
+            />
+          </div>
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Location</label>
+            <input
+              style={styles.input}
+              type="text"
+              name="location"
+              value={userDataState.location}
+              onChange={(e) => setUserDataState({ ...userDataState, location: e.target.value })}
+              required
+            />
+          </div>
+          <button
+            style={{
+              ...styles.button,
+              backgroundColor: loading ? '#ccc' : '#007bff',
+              cursor: loading ? 'not-allowed' : 'pointer',
+            }}
+            type="submit"
+            disabled={loading}
+          >
+            {loading ? 'Updating...' : 'Update Profile'}
+          </button>
+        </Form>
+        {message && (
+          <p
+            style={{
+              ...styles.message,
+              color: message.includes('successfully') ? 'green' : 'red',
+            }}
+          >
+            {message || actionData?.message}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const styles: { [key: string]: React.CSSProperties } = {
+  container: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '100vh',
+    backgroundColor: '#f3f4f6',
+  },
+  formBox: {
+    backgroundColor: '#fff',
+    padding: '30px',
+    borderRadius: '8px',
+    boxShadow: '0 4px 10px rgba(0, 0, 0, 0.1)',
+    width: '100%',
+    maxWidth: '400px',
+  },
+  heading: {
+    textAlign: 'center',
+    marginBottom: '20px',
+    color: '#333',
+  },
+  loading: {
+    textAlign: 'center',
+    color: '#555',
+    marginBottom: '15px',
+  },
+  formGroup: {
+    marginBottom: '20px',
+  },
+  label: {
+    display: 'block',
+    fontSize: '14px',
+    marginBottom: '8px',
+    color: '#555',
+  },
+  input: {
+    width: '100%',
+    padding: '12px',
+    borderRadius: '8px',
+    border: '2px solid #ccc',
+    boxSizing: 'border-box',
+  },
+  button: {
+    width: '100%',
+    padding: '12px',
+    color: '#fff',
+    borderRadius: '8px',
+    border: 'none',
+    fontSize: '16px',
+  },
+  message: {
+    textAlign: 'center',
+    marginTop: '10px',
+  },
+};
+
+export default UserProfile;
